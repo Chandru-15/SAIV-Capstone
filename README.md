@@ -4,13 +4,11 @@
 
 SAIV is a full-stack attendance verification system designed to make classroom check-ins more trustworthy while reducing manual attendance administration. It combines student authentication, browser registration, face recognition, active liveness checks, geolocation, risk-based attendance decisions, and a staff dashboard in one Docker-based application.
 
-> **Project status:** Final coursework submission. This repository is a snapshot of the submitted system, not a production-hardened identity-verification service.
-
 ## Overview
 
 A student signs in to the web application, gives the required camera and location consents, enrols their face, and registers a browser. During an open attendance session, SAIV captures the required evidence and submits it to the backend. The backend checks the session rules, face match, liveness, location and device signals before returning an attendance outcome. Instructors and administrators can manage sessions and review attendance through the staff portal.
 
-The normal student attendance challenge in this submission uses **randomized screen-light/colour reflection together with a blink**. Head-pose detection exists in the face service but **standalone head-turn or head-tilt evidence does not authorize an attendance check-in**.
+The submitted application supports three **server-issued active liveness challenge types**: **blink** (open → closed → open), **head turn** (turning the face left or right), and **screen-light/colour reflection** (responding to a randomized colour sequence). The student interface displays the instruction for the challenge issued by the backend. **Head turn is not head tilt**: this submission does not implement a separate sideways head-tilt (ear-to-shoulder) challenge.
 
 ## Key features
 
@@ -20,7 +18,7 @@ The normal student attendance challenge in this submission uses **randomized scr
 - Dashboard with enrolled courses, active sessions, check-in status and attendance history.
 - Camera and geolocation permission handling with explicit, backend-recorded consent.
 - Face enrolment, browser registration and a guided check-in flow.
-- Active liveness capture combining a screen-light challenge with an **open → closed → open** blink sequence.
+- Guided camera capture for server-issued **blink**, **head-turn**, or **screen-light/colour-reflection** liveness challenges.
 - Geolocation/geofencing, QR scanning support and clear attendance results.
 - Responsive **Next.js** Progressive Web App with offline handling for supported static resources.
 
@@ -37,7 +35,7 @@ The normal student attendance challenge in this submission uses **randomized scr
 
 - Face enrolment and one-to-one matching using an ONNX face embedding model.
 - MediaPipe-based face landmarks and liveness-related signals.
-- Active colour-reflection and blink verification, with face identity checks across submitted evidence.
+- MediaPipe-based **blink** and **left/right head-turn** detection, plus randomized screen-light/colour-reflection analysis. These are distinct challenge types in the submitted code.
 - Anti-spoofing checks intended to reduce straightforward still-photo and replay abuse.
 - Raw face frames are processed for verification rather than stored as attendance images.
 
@@ -139,7 +137,7 @@ For additional workflows, see [`LOCAL-DEV.md`](LOCAL-DEV.md), [`docs/API-SPECIFI
 1. **Staff setup:** Sign in with an appropriate staff account, create a course, assign staff, enrol a student, and open an attendance session with the desired venue and policies.
 2. **Student setup:** Register or sign in, enable camera and geolocation consents, enrol a face, and register the current browser.
 3. **Browser-key setup (when required):** Confirm the account password and enrol the browser signing key.
-4. **Check in:** Open the session, allow camera/location access, follow the screen-light and blink instructions, and submit the evidence.
+4. **Check in:** Open the session, allow camera/location access, follow the server-issued **blink, head-turn, or screen-light** challenge, and submit the evidence.
 5. **Review:** Read the approved/flagged/rejected result and inspect the corresponding attendance record through the staff portal.
 
 ## Testing
@@ -176,7 +174,7 @@ See the test suite and module directories for additional backend and face-servic
 
 - This is a coursework implementation. The default Docker Compose configuration publishes internal service ports and contains **development fallback credentials**; set unique secrets, restrict network access, and review the deployment before exposing it beyond localhost.
 - Browser-key verification confirms that the browser can use its registered signing key; it **does not attest to a physical device's hardware identity**.
-- Active-liveness protections reduce common photo attacks but do not guarantee resistance to prepared video, injected camera frames, or sophisticated replay attacks.
+- Active-liveness checks are **not spoof-proof**. In particular, head-turn angle changes can be imitated by sequences of still photos; randomized screen-light challenges also have replay limitations. This coursework version should not be treated as a production-grade anti-spoofing system.
 - The staff portal's session-link handling requires further hardening for public deployment. The included Next.js version should also be upgraded and security-reviewed before internet-facing use.
 - The supplied face recognition model is documented as **non-commercial research use**; see [`module3-face-recognition/models/README.md`](module3-face-recognition/models/README.md) before reuse.
 - Keep passwords, API keys, biometric media and live session tokens out of Git history.
