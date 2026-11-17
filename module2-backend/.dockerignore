@@ -1,0 +1,52 @@
+# The Dockerfile ends in `COPY . .`, so anything left here is baked into the
+# image. Keep this list to things the running service does not need.
+#
+# Do NOT exclude app/: it is the service. db/schema.sql is already outside this
+# build context (it lives in the repo root) and the `migrate` compose service
+# mounts it, so nothing here affects migrations.
+
+# Local secrets. The container's environment comes from docker-compose, and
+# nothing in app/ reads a dotenv file -- every setting is os.environ.get, so
+# excluding these changes no behaviour. It does keep SECRET_KEY out of an
+# image layer, where `docker run --entrypoint cat <image> /app/.env.local`
+# would hand anyone the key that signs every access token.
+.env
+.env.*
+!.env.example
+
+# A local virtualenv is built for the host OS and architecture. Copied into a
+# linux image it is both useless and by far the largest thing in the context
+# (~183 MB here); pip installs the real dependencies from requirements.txt.
+venv/
+.venv/
+env/
+
+# Python build artefacts and caches.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# The suite cannot run inside the image regardless: tests/conftest.py reads
+# db/schema.sql from the repo root, which is outside this build context, and
+# its default TEST_DATABASE_URL is localhost:5434 -- a host port that is not
+# reachable from inside a container. Shipping the tests anyway would only
+# invite someone to "fix" that by pointing TEST_DATABASE_URL at the compose
+# database, and the flow fixtures TRUNCATE every table they touch. Run the
+# suite on the host against a scratch database instead.
+tests/
+pytest.ini
+
+# Editor and OS cruft.
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Not used at runtime.
+Dockerfile
+.dockerignore

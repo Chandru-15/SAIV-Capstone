@@ -1,0 +1,289 @@
+services:
+  # ==========================================================================
+  # Infrastructure Services
+  # ==========================================================================
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: saiv-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-saiv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-saiv_password}
+      POSTGRES_DB: ${POSTGRES_DB:-saiv}
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-saiv} -d ${POSTGRES_DB:-saiv}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - saiv-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: saiv-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - saiv-network
+
+  migrate:
+    image: postgres:15-alpine
+    container_name: saiv-migrate
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-saiv_password}
+    volumes:
+      - ./db:/db:ro
+    command: psql -h postgres -U ${POSTGRES_USER:-saiv} -d ${POSTGRES_DB:-saiv} -v ON_ERROR_STOP=1 -f /db/schema.sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - saiv-network
+    restart: "no"
+
+  # Local mail catcher, so password-reset codes are actually delivered without
+  # an account anywhere. Accepts SMTP on 1025 and shows what it received in a
+  # web UI on 8025; nothing it receives ever leaves this machine. Point
+  # SMTP_HOST at a real provider in .env to send for real instead.
+  mailpit:
+    image: axllent/mailpit:v1.33
+    container_name: saiv-mailpit
+    ports:
+      - "1025:1025"   # SMTP, what the backend talks to
+      - "8025:8025"   # web UI, where you read the code
+    environment:
+      MP_MAX_MESSAGES: 500
+      # Accept any login, and accept it without TLS. Mailpit is a local sink,
+      # and this keeps it working if SMTP_USER is left set from a real provider.
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    networks:
+      - saiv-network
+
+  # ==========================================================================
+  # Application Services (Students implement these)
+  # ==========================================================================
+
+  backend:
+    build:
+      context: ./module2-backend
+      dockerfile: Dockerfile
+    container_name: saiv-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-saiv}:${POSTGRES_PASSWORD:-saiv_password}@postgres:5432/${POSTGRES_DB:-saiv}
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      FACE_SERVICE_URL: http://face-recognition:8001
+      # Browser origins allowed to read API responses, comma separated. Set
+      # ALLOWED_ORIGINS in .env to append a tunnel origin when demoing
+      # off-machine, e.g.
+      #   http://localhost:3000,https://<id>-3000.asse.devtunnels.ms
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      # Addresses or CIDR ranges whose X-Forwarded-For header is believed,
+      # comma separated. EMPTY BY DEFAULT, which means the header is ignored
+      # and the peer address is used.
+      #
+      # Do not set this while port 8000 is published below. A client that can
+      # open a connection to the backend directly would then be a "proxy", and
+      # could pick its own rate-limit bucket by varying the header -- which is
+      # the bypass this setting exists to close. It is safe only once the
+      # backend is reachable solely through a reverse proxy, and it should
+      # name that proxy's address, not a whole bridge subnet (the bridge
+      # gateway is also what direct traffic from the host looks like).
+      # See module2-backend/API-NOTES.md section 8.
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # Rate limits. These two are keyed on the CLIENT ADDRESS, and with
+      # TRUSTED_PROXY_IPS empty above -- which is the correct default while
+      # port 8000 is published -- the only address the backend can see is the
+      # docker bridge gateway. Every caller therefore shares one bucket, so
+      # the specification's per-user-sized defaults (10 registrations and 60
+      # sign-ins an hour, see app/services/rate_limit.py) become a per-
+      # DEPLOYMENT budget: one cohort enrolling, or one lecture theatre
+      # signing in, exhausts them for everybody, and the public test suite
+      # exhausts the registration budget inside its first ten tests.
+      #
+      # Sized for a cohort arriving at once rather than for one person. They
+      # still throttle casual grinding, and the module docstring is explicit
+      # that these are not a security boundary -- nothing irreversible
+      # depends on them. Put the backend behind a reverse proxy and set
+      # TRUSTED_PROXY_IPS to that proxy, and the per-address budgets start
+      # meaning per-address again, at which point lower these.
+      #
+      # Measured: one full run of tests/public/ spends about 130 registrations
+      # and 95 sign-ins, all from the one bridge address. The budgets below
+      # leave room for repeated runs within the same hour, which a 300/hour
+      # registration budget did not -- the second run failed 27 tests on 429.
+      RATE_LIMIT_REGISTER_PER_HOUR: ${RATE_LIMIT_REGISTER_PER_HOUR:-2000}
+      RATE_LIMIT_LOGIN_PER_HOUR: ${RATE_LIMIT_LOGIN_PER_HOUR:-3000}
+      # Optional. Enables the geolocation/IP consistency signal by pointing at
+      # a MaxMind GeoLite2-City database INSIDE the container; unset, the
+      # signal is simply omitted and nothing else changes. Needs the volume
+      # below, and only ever does anything once a reverse proxy sets
+      # X-Forwarded-For -- without it the only address we see is this bridge.
+      # See module2-backend/app/services/ip_geolocation.py.
+      GEOIP_DATABASE_PATH: ${GEOIP_DATABASE_PATH:-}
+      # Outgoing email for the password-reset codes. Defaults to the
+      # mailpit service above, so a clean clone delivers codes with no
+      # account and no credentials -- read them at http://localhost:8025.
+      # Override in .env to send through a real provider (see
+      # .env.example). Setting SMTP_HOST empty disables sending entirely:
+      # codes are still issued and still appear on the admin's reset list,
+      # but nothing leaves the box.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: "${SMTP_FROM:-SAIV <no-reply@saiv.local>}"
+      # Mailpit speaks plain SMTP. A real provider needs this at 1.
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-0}
+      SMTP_SSL: ${SMTP_SSL:-0}
+    # volumes:
+    #   - ./db/geoip/GeoLite2-City.mmdb:/geoip/GeoLite2-City.mmdb:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    networks:
+      - saiv-network
+
+  face-recognition:
+    build:
+      context: ./module3-face-recognition
+      dockerfile: Dockerfile
+    container_name: saiv-face-recognition
+    ports:
+      - "8001:8001"
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - saiv-network
+
+  frontend:
+    build:
+      context: ./module1-frontend
+      dockerfile: Dockerfile
+    container_name: saiv-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Root-relative on purpose. The browser calls /api/v1/... on whichever
+      # host served the page and next.config.js proxies it to the backend, so
+      # one build works on localhost, a dev tunnel and a real domain. An
+      # absolute http://localhost:8000 here breaks every origin except
+      # localhost: it is the viewer's own machine, and a browser on an HTTPS
+      # page blocks a plain-HTTP API call outright.
+      NEXT_PUBLIC_API_URL: /api/v1
+      NEXT_PUBLIC_FACE_SERVICE_URL: http://localhost:8001
+    depends_on:
+      - backend
+    networks:
+      - saiv-network
+
+  dashboard:
+    build:
+      context: ./module4-observability
+      dockerfile: Dockerfile
+    container_name: saiv-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-saiv}:${POSTGRES_PASSWORD:-saiv_password}@postgres:5432/${POSTGRES_DB:-saiv}
+      BACKEND_URL: http://backend:8000
+      PROMETHEUS_URL: http://prometheus:9090
+      FACE_SERVICE_URL: http://face-recognition:8001
+      GRAFANA_PUBLIC_URL: http://localhost:3001
+    depends_on:
+      - backend
+      - prometheus
+    networks:
+      - saiv-network
+
+  metrics-exporter:
+    build:
+      context: ./module4-observability
+      dockerfile: Dockerfile
+    container_name: saiv-exporter
+    command: ["python", "exporter.py"]
+    ports:
+      - "9101:9101"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-saiv}:${POSTGRES_PASSWORD:-saiv_password}@postgres:5432/${POSTGRES_DB:-saiv}
+      BACKEND_URL: http://backend:8000
+      FACE_SERVICE_URL: http://face-recognition:8001
+      EXPORTER_PORT: "9101"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - saiv-network
+
+  # ==========================================================================
+  # Observability Services
+  # ==========================================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: saiv-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./module4-observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - saiv-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: saiv-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_COOKIE_SAMESITE: disabled
+      GF_USERS_DEFAULT_THEME: dark
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/json/saiv-ops.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./module4-observability/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+      - metrics-exporter
+    networks:
+      - saiv-network
+
+networks:
+  saiv-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:

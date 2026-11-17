@@ -1,0 +1,153 @@
+# Standalone configuration: do not combine with docker-compose.yml.
+name: saiv-phase3a
+x-python-health: &python-health
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+services:
+  postgres:
+    image: postgres:15.14-alpine@sha256:64583b3cb4f2010277bdd9749456de78e5c36f8956466ba14b0b96922e510950
+    environment:
+      POSTGRES_USER: saiv
+      POSTGRES_PASSWORD: ${SAIV_DB_PASSWORD:?Run tools/phase3a/saiv.ps1 init}
+      POSTGRES_DB: saiv
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U saiv -d saiv']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  migrate:
+    image: postgres:15.14-alpine@sha256:64583b3cb4f2010277bdd9749456de78e5c36f8956466ba14b0b96922e510950
+    environment:
+      PGPASSWORD: ${SAIV_DB_PASSWORD:?Run init}
+    volumes:
+      - ./db:/db:ro
+    command: [psql, -h, postgres, -U, saiv, -d, saiv, -v, ON_ERROR_STOP=1, -f, /db/schema.sql]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: 'no'
+  backend:
+    build: ./module2-backend
+    environment:
+      DATABASE_URL: postgresql://saiv:${SAIV_DB_PASSWORD:?Run init}@postgres:5432/saiv
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SAIV_SECRET_KEY:?Run init}
+      FACE_SERVICE_URL: http://face-recognition:8001
+      ALLOWED_ORIGINS: ${SAIV_PUBLIC_ORIGIN:-http://localhost:8080},http://localhost:3000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    ports: ['127.0.0.1:8000:8000']
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      <<: *python-health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+  face-recognition:
+    build: ./module3-face-recognition
+    environment:
+      REDIS_URL: redis://redis:6379
+      FACE_EMBED_MODEL_PATH: /app/models/w600k_mbf.onnx
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    volumes:
+      - ./.local/phase3a/models:/app/models:ro
+    depends_on:
+      redis: {condition: service_healthy}
+    healthcheck:
+      <<: *python-health
+      # Real model loading; the HTTP /health endpoint alone is insufficient.
+      test: [CMD, python, -c, 'from app.main import _get_embedder; _get_embedder()']
+      start_period: 60s
+  frontend:
+    build: ./module1-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: ${SAIV_PUBLIC_ORIGIN:-http://localhost:8080}/api/v1
+      NEXT_PUBLIC_STAFF_PORTAL_URL: ${SAIV_PUBLIC_ORIGIN:-http://localhost:8080}/portal/
+      SAIV_STUDENT_PORTAL_ENABLED: ${SAIV_STUDENT_PORTAL_ENABLED:-false}
+      SAIV_STUDENT_PORTAL_LOCAL_ONLY: ${SAIV_STUDENT_PORTAL_LOCAL_ONLY:-false}
+      NEXT_PUBLIC_STUDENT_PORTAL_URL: ${NEXT_PUBLIC_STUDENT_PORTAL_URL:-}
+      SAIV_BACKEND_INTERNAL_URL: http://backend:8000
+    ports: ['127.0.0.1:3000:3000']
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      test: [CMD, node, -e, "fetch('http://localhost:3000/api/config').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+  dashboard:
+    build: ./module4-observability
+    command: [streamlit, run, app/main.py, --server.port=8501, --server.address=0.0.0.0, --server.baseUrlPath=portal, --server.enableCORS=true, --server.enableXsrfProtection=true]
+    ports: ['127.0.0.1:8501:8501']
+    environment:
+      DATABASE_URL: postgresql://saiv:${SAIV_DB_PASSWORD:?Run init}@postgres:5432/saiv
+      BACKEND_URL: http://backend:8000
+      PROMETHEUS_URL: http://prometheus:9090
+      FACE_SERVICE_URL: http://face-recognition:8001
+      GRAFANA_PUBLIC_URL: http://localhost:3001
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      <<: *python-health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8501/portal/_stcore/health', timeout=3)"]
+  gateway:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    ports: ['127.0.0.1:8080:8080']
+    environment:
+      SAIV_PUBLIC_ORIGIN: ${SAIV_PUBLIC_ORIGIN:-http://localhost:8080}
+      SAIV_PUBLIC_HOST: ${SAIV_PUBLIC_HOST:-localhost}
+      SAIV_GATEWAY_HOSTS: ${SAIV_GATEWAY_HOSTS:-localhost 127.0.0.1}
+      SAIV_FORWARDED_PROTO: ${SAIV_FORWARDED_PROTO:-http}
+    volumes:
+      - ./deploy/phase3a/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      frontend: {condition: service_healthy}
+      backend: {condition: service_healthy}
+  metrics-exporter:
+    build: ./module4-observability
+    command: [python, exporter.py]
+    environment:
+      DATABASE_URL: postgresql://saiv:${SAIV_DB_PASSWORD:?Run init}@postgres:5432/saiv
+      BACKEND_URL: http://backend:8000
+      FACE_SERVICE_URL: http://face-recognition:8001
+      EXPORTER_PORT: '9101'
+    depends_on:
+      backend: {condition: service_healthy}
+  prometheus:
+    image: prom/prometheus:v3.2.1@sha256:6927e0919a144aa7616fd0137d4816816d42f6b816de3af269ab065250859a62
+    ports: ['127.0.0.1:9090:9090']
+    volumes:
+      - ./deploy/phase3a/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+  grafana:
+    image: grafana/grafana:11.6.0@sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb
+    ports: ['127.0.0.1:3001:3000']
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${SAIV_GRAFANA_PASSWORD:?Run init}
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_SECURITY_ALLOW_EMBEDDING: 'false'
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/json/saiv-ops.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./module4-observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on: [prometheus, metrics-exporter]
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.123.0@sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2
+    command: [--config=/etc/otel/config.yaml]
+    volumes:
+      - ./deploy/phase3a/otel.yml:/etc/otel/config.yaml:ro
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,57 @@
+# Optional FUTURE manual demo only. Never combine with any existing Compose files.
+# Fresh synthetic accounts only; all mail is captured locally, never relayed.
+name: saiv-forgot-password-local
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: otp_demo
+      POSTGRES_PASSWORD: ${FP_DB_PASSWORD:?Generate a temporary local database password}
+      POSTGRES_DB: saiv_forgot_password_demo
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ../../db/schema.sql:/docker-entrypoint-initdb.d/001-base.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U otp_demo -d saiv_forgot_password_demo]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [data]
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:8025:8025"
+    tmpfs:
+      - /data
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    networks: [data, web]
+  backend:
+    build:
+      context: ../../module2-backend
+    image: saiv-forgot-password-demo:bb28642
+    ports:
+      - "127.0.0.1:8400:8000"
+    volumes:
+      - ./demo_backend.py:/demo/entry.py:ro
+    command: [uvicorn, --app-dir, /demo, entry:app, --host, 0.0.0.0, --port, "8000"]
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg2://otp_demo:${FP_DB_PASSWORD:?Generate a temporary database password}@postgres:5432/saiv_forgot_password_demo
+      SECRET_KEY: ${FP_SECRET_KEY:?Generate a temporary demo signing key}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_STARTTLS: "0"
+      SMTP_SSL: "0"
+      SMTP_FROM: "SAIV Demo <no-reply@example.edu>"
+      SESSION_AUTO_CLOSE_SECONDS: "0"
+      FACE_SERVICE_URL: http://127.0.0.1:9
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data, web]
+networks:
+  data:
+    internal: true
+  web: {}

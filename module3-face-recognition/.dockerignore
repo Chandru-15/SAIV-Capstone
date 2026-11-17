@@ -1,0 +1,40 @@
+# The Dockerfile ends in `COPY . .`, so anything left here is baked into the
+# image. Keep this list to things the running service does not need.
+#
+# Do NOT add models/ or *.onnx: w600k_mbf.onnx is the ArcFace embedding model
+# the service loads at startup, and excluding it makes /face/enroll,
+# /face/verify and /face/match answer 503 in the container while working
+# perfectly on the developer's machine. models/README.md gives the same
+# warning about .gitignore.
+
+# A local virtualenv is built for the host OS and architecture. Copied into a
+# linux image it is both useless and by far the largest thing in the context
+# (~930 MB here); pip installs the real dependencies from requirements.txt.
+venv/
+.venv/
+env/
+
+# Python build artefacts and test caches.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local configuration. docker-compose supplies the container's environment, so
+# a developer's .env.local must not become the image's defaults.
+.env
+.env.*
+!.env.example
+
+# Editor and OS cruft.
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Not used at runtime.
+Dockerfile
+.dockerignore

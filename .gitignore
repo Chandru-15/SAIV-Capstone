@@ -1,0 +1,44 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local Phase 3A deployment state, credentials and model artifacts
+.local/
+# Keep stray/experimental model downloads out of the repository, but NOT the
+# one the face service actually needs. w600k_mbf.onnx is tracked on purpose --
+# a clone has to be able to start module 3 -- and git ignores only untracked
+# files, so without this negation the rule silently did nothing for it while
+# still hiding any REPLACEMENT from `git add .`.
+module3-face-recognition/models/*.onnx
+!module3-face-recognition/models/w600k_mbf.onnx

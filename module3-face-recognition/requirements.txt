@@ -1,0 +1,37 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+python-multipart==0.0.6
+redis==5.0.1
+httpx==0.26.0
+
+# Face recognition & CV
+# Pinned, and deliberately 0.10.18 rather than 0.10.21.
+#
+# mediapipe 1.x removed the legacy `mp.solutions` API this module is built on,
+# so an unpinned >=0.10.9 resolves to a version that fails at import with
+# "module 'mediapipe' has no attribute 'solutions'".
+#
+# 0.10.21 publishes no linux/aarch64 wheel, so it breaks `docker compose build
+# face-recognition` on Apple Silicon:
+#   ERROR: Could not find a version that satisfies the requirement
+#   mediapipe==0.10.21 (from versions: ... 0.10.15, 0.10.18, 1.0.0, ... 1.1.1)
+# 0.10.18 is the newest release that exists for arm64 AND still exposes
+# mp.solutions.{face_detection,face_mesh}. Verified importable on both arches.
+mediapipe==0.10.18
+opencv-python==4.10.0.84
+opencv-contrib-python==4.10.0.84
+numpy==1.26.4
+pillow>=10.2.0
+# ArcFace (MobileFaceNet) face embeddings run on ONNX Runtime: small CPU wheels for
+# linux x86_64 + aarch64, no compiler needed (unlike dlib). Model: models/w600k_mbf.onnx
+onnxruntime==1.31.1
+# face-recognition==1.3.0  # Optional - has Python 3.12 compatibility issues
+
+# Observability
+# Serves GET /metrics for Prometheus (see app/main.py).
+prometheus-client==0.19.0
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3

@@ -1,0 +1,40 @@
+{
+  "name": "saiv-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "node --require ./tests/register.cjs --test tests/access.test.cjs tests/config.test.cjs tests/auth-recovery.test.cjs tests/policy-errors.test.cjs tests/student-flow.test.cjs tests/liveness.test.cjs tests/device.test.cjs tests/password-reset.test.cjs tests/profile.test.cjs tests/presentation.test.cjs tests/portal.test.cjs tests/proxy-config.test.cjs",
+    "test:production": "node ./tests/production-smoke.cjs",
+    "test:browser": "node ./tests/browser-smoke.cjs",
+    "test:browser-key": "node ./tests/browser-key-storage.cjs"
+  },
+  "dependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "axios": "^1.6.5",
+    "jose": "^5.2.0",
+    "jsqr": "^1.4.0",
+    "localforage": "^1.10.0",
+    "next": "14.1.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.17",
+    "eslint": "^8",
+    "eslint-config-next": "14.1.0",
+    "postcss": "^8.4.33",
+    "react-test-renderer": "18.3.1",
+    "tailwindcss": "^3.4.0"
+  }
+}

@@ -1,0 +1,44 @@
+# Use only with docker-compose.yml and the isolated pilot project name.
+name: saiv-crypto-pilot
+services:
+  postgres:
+    container_name: !reset null
+    ports: !reset []
+  redis:
+    container_name: !reset null
+    ports: !reset []
+  migrate:
+    container_name: !reset null
+  mailpit:
+    container_name: !reset null
+    ports: !override ['127.0.0.1:5825:8025']
+  backend:
+    container_name: !reset null
+    ports: !override ['127.0.0.1:5800:8000']
+    environment:
+      ALLOWED_ORIGINS: http://localhost:5300
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+  face-recognition:
+    container_name: !reset null
+    ports: !override ['127.0.0.1:5801:8001']
+  frontend:
+    container_name: !reset null
+    ports: !override ['127.0.0.1:5300:3000']
+    environment:
+      NEXT_PUBLIC_FACE_SERVICE_URL: http://localhost:5801
+      NEXT_PUBLIC_STAFF_PORTAL_URL: http://localhost:5851
+  dashboard:
+    container_name: !reset null
+    ports: !override ['127.0.0.1:5851:8501']
+    environment:
+      GRAFANA_PUBLIC_URL: http://localhost:5301
+  metrics-exporter:
+    container_name: !reset null
+    ports: !reset []
+  prometheus:
+    container_name: !reset null
+    ports: !reset []
+  grafana:
+    container_name: !reset null
+    ports: !override ['127.0.0.1:5301:3000']

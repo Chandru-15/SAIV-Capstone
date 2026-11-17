@@ -1,0 +1,279 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Backend",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_backend_up", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "#00E8B4" } } }
+          ]
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Face service",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_face_up", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "#00E8B4" } } }
+          ]
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Check-ins",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum(saiv_checkins)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "#3B9EFF" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Flagged queue",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_flagged_pending", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00E8B4", "value": null },
+              { "color": "#FFC43A", "value": 1 },
+              { "color": "#FF4D6D", "value": 8 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Today (SGT)",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_checkins_today", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "#00E8B4" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Failed logins 24h",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_login_failures_24h", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#00E8B4", "value": null },
+              { "color": "#FFC43A", "value": 3 },
+              { "color": "#FF4D6D", "value": 10 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Check-ins (live)",
+      "gridPos": { "h": 10, "w": 16, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(saiv_checkins)", "legendFormat": "total", "refId": "A" },
+        { "expr": "saiv_checkins_today", "legendFormat": "today", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 18, "spanNulls": true, "drawStyle": "line" },
+          "min": 0,
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "total" }, "properties": [{ "id": "color", "value": { "fixedColor": "#00E8B4", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "today" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3B9EFF", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 6,
+      "type": "piechart",
+      "title": "Verification status",
+      "gridPos": { "h": 10, "w": 8, "x": 16, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_checkins", "legendFormat": "{{status}}", "instant": true, "refId": "A" }],
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "approved" }, "properties": [{ "id": "color", "value": { "fixedColor": "#00E8B4", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "flagged" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FFC43A", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "pending" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3B9EFF", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "rejected" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FF4D6D", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "appealed" }, "properties": [{ "id": "color", "value": { "fixedColor": "#D084FF", "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "legend": { "displayMode": "list", "placement": "bottom", "values": ["value", "percent"] }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Check-ins by status",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_checkins", "legendFormat": "{{status}}", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": true, "drawStyle": "line", "stacking": { "mode": "normal", "group": "A" } },
+          "min": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "approved" }, "properties": [{ "id": "color", "value": { "fixedColor": "#00E8B4", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "flagged" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FFC43A", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "pending" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3B9EFF", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "rejected" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FF4D6D", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "appealed" }, "properties": [{ "id": "color", "value": { "fixedColor": "#D084FF", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Service availability",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "saiv_backend_up", "legendFormat": "backend", "refId": "A" },
+        { "expr": "saiv_face_up", "legendFormat": "face", "refId": "B" },
+        { "expr": "saiv_db_up", "legendFormat": "postgres", "refId": "C" },
+        { "expr": "up{job=\"saiv-exporter\"}", "legendFormat": "exporter", "refId": "D" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Sessions by status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_sessions", "legendFormat": "{{status}}", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 12, "spanNulls": true }, "min": 0 },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Average risk score",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_avg_risk", "legendFormat": "avg risk", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 16, "spanNulls": true },
+          "min": 0,
+          "max": 1,
+          "color": { "fixedColor": "#FF4D6D", "mode": "fixed" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Backend response time",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_backend_latency_seconds", "legendFormat": "health probe", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "spanNulls": true, "drawStyle": "line" },
+          "min": 0,
+          "unit": "s",
+          "color": { "fixedColor": "#3B9EFF", "mode": "fixed" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Health probe < 2s",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "saiv_backend_latency_seconds < bool 2", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "WATCH", "color": "red" }, "1": { "text": "MET", "color": "#00E8B4" } } }
+          ]
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["saiv", "attendance"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "Asia/Singapore",
+  "title": "SAIV Operations",
+  "uid": "saiv-ops",
+  "version": 1
+}

@@ -1,0 +1,30 @@
+{
+    auto_https off
+    admin off
+}
+:8080 {
+  route {
+    # No access log: request URLs may contain credentials in legacy applications.
+    # Permit loopback Host rewriting by a local Dev Tunnel agent as well.
+    @wrongHost not host {$SAIV_GATEWAY_HOSTS:localhost 127.0.0.1}
+    handle @wrongHost {
+        respond "Unconfigured gateway host" 400
+    }
+    @portal path /portal /portal/*
+    handle @portal {
+        header Cache-Control "no-store"
+        respond "Portal forwarding is disabled pending removal of Module 4 URL session credentials. Local inspection: http://localhost:8501/portal/" 503
+    }
+    handle /api/v1/* {
+        reverse_proxy backend:8000 {
+            header_up X-Forwarded-Proto {$SAIV_FORWARDED_PROTO:http}
+            header_up X-Forwarded-For {http.request.remote.host}
+        }
+    }
+    handle {
+        reverse_proxy frontend:3000 {
+            header_up X-Forwarded-Proto {$SAIV_FORWARDED_PROTO:http}
+        }
+    }
+  }
+}
