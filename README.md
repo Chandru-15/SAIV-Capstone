@@ -1,338 +1,187 @@
-# SAIV - Secure Attendance & Identity Verification
+# SAIV — Secure Attendance & Identity Verification
 
-## NTU Computer Science Capstone Project - Student Package
+**NTU SC3099 Capstone Project · Group 33**
 
-Welcome to the SAIV capstone project! Your team will build a secure, privacy-preserving attendance system resistant to deepfakes, replay attacks, and remote sign-ins.
+SAIV is a full-stack attendance verification system designed to make classroom check-ins more trustworthy while reducing manual attendance administration. It combines student authentication, browser registration, face recognition, active liveness checks, geolocation, risk-based attendance decisions, and a staff dashboard in one Docker-based application.
 
----
+> **Project status:** Final coursework submission. This repository is a snapshot of the submitted system, not a production-hardened identity-verification service.
 
-## Group 33 Submission — Start Here
+## Overview
 
-| | |
-|---|---|
-| **[Demo video](docs/Capstone%20Demo%20Test%20Run.mp4)** (79 MB, MP4) | A recorded run of the whole system: sign-in, liveness challenge, check-in and the instructor dashboard. |
-| **[Presentation slides](docs/SC3099%20Capstone%20Presentation%20Slides%20Group%2033.pdf)** (PDF) | SC3099 final presentation, Group 33. |
+A student signs in to the web application, gives the required camera and location consents, enrols their face, and registers a browser. During an open attendance session, SAIV captures the required evidence and submits it to the backend. The backend checks the session rules, face match, liveness, location and device signals before returning an attendance outcome. Instructors and administrators can manage sessions and review attendance through the staff portal.
 
-Both live in `docs/`. Download the video rather than previewing it on GitHub — 79 MB
-is above the size GitHub renders inline.
+The normal student attendance challenge in this submission uses **randomized screen-light/colour reflection together with a blink**. Head-pose detection exists in the face service but **standalone head-turn or head-tilt evidence does not authorize an attendance check-in**.
 
-## Project Overview
+## Key features
 
-### Learning Objectives
-- Full-stack development (PWA frontend, REST API, database design)
-- Security engineering (liveness detection, device binding, geofencing)
-- Privacy-first architecture (PII minimization, encrypted storage)
-- ML integration (pre-trained face recognition models)
-- DevOps (Docker, observability)
+### Student experience — Module 1
 
-### Project Scope
-- **Duration**: 12-14 weeks
-- **Team Size**: 4 students (1 per module)
-- **Grading**: 130 points total (90 public + 40 hidden)
+- Student registration, login, password recovery and protected pages.
+- Dashboard with enrolled courses, active sessions, check-in status and attendance history.
+- Camera and geolocation permission handling with explicit, backend-recorded consent.
+- Face enrolment, browser registration and a guided check-in flow.
+- Active liveness capture combining a screen-light challenge with an **open → closed → open** blink sequence.
+- Geolocation/geofencing, QR scanning support and clear attendance results.
+- Responsive **Next.js** Progressive Web App with offline handling for supported static resources.
 
----
+### Attendance and security — Module 2
+
+- **FastAPI** REST API for authentication, users, courses, enrolments, sessions and check-ins.
+- Role-based access for **student, TA, instructor and admin** accounts.
+- JWT-based sessions, password hashing, input validation and Redis-backed rate limiting.
+- Risk-based attendance outcomes (**approved, flagged or rejected**) using face, liveness, location, device and session evidence.
+- Consent enforcement, unknown-browser flagging, replay protections and audit records.
+- Optional **cryptographic browser verification** for enabled student accounts: a browser stores a non-extractable **ECDSA P-256** signing key and proves possession by signing a server-issued, single-use challenge. This is **browser-key possession**, not hardware-backed device attestation.
+
+### Face recognition — Module 3
+
+- Face enrolment and one-to-one matching using an ONNX face embedding model.
+- MediaPipe-based face landmarks and liveness-related signals.
+- Active colour-reflection and blink verification, with face identity checks across submitted evidence.
+- Anti-spoofing checks intended to reduce straightforward still-photo and replay abuse.
+- Raw face frames are processed for verification rather than stored as attendance images.
+
+### Staff dashboard and monitoring — Module 4
+
+- **Streamlit** portal for role-scoped course, session, attendance and administrative workflows.
+- Attendance review, face re-enrolment requests, reporting and export capabilities.
+- **Prometheus** metrics, **Grafana** dashboards and a metrics exporter for service monitoring.
 
 ## Architecture
 
-Your team will implement 4 modules:
+```text
+Student browser / PWA (Next.js)
+        │
+        │ REST /api/v1
+        ▼
+Backend API (FastAPI) ────────── PostgreSQL
+        │                             │
+        ├────────────── Redis         └── Attendance, users, sessions,
+        │                                  device records and audit events
+        ▼
+Face recognition service (FastAPI + MediaPipe + ONNX Runtime)
 
-### Module 1: Student Frontend PWA
-**Recommended Tech Stack**: React/Next.js, TypeScript, WebRTC
-- Student check-in interface
-- Camera access for liveness challenges
-- Geolocation with consent
-- Device binding (public key rotation)
-- Offline-capable PWA
+Staff browser ───── Streamlit staff dashboard ───── Backend API
 
-### Module 2: Backend API
-**Recommended Tech Stack**: Python FastAPI, PostgreSQL, Redis
-- RESTful API with JWT authentication
-- Session management (time-boxed check-ins)
-- Check-in processing and validation
-- Rate limiting and CORS
-- Audit logging
-
-### Module 3: Face Recognition & Risk Service
-**Recommended Tech Stack**: Python, MediaPipe, OpenCV
-- Liveness detection (blink, head pose)
-- Face matching (with privacy controls)
-- Risk scoring (signal fusion)
-- Device attestation
-- Anti-spoofing heuristics
-
-### Module 4: Observability & Instructor Dashboard 
-**Recommended Tech Stack**: Streamlit, Prometheus, Grafana
-- Instructor web interface
-- Real-time analytics
-- Audit log explorer
-- Metrics visualization
-- CSV export for gradebook
-
----
-
-## Getting Started
-
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.11+
-- Node.js 18+
-
-### Quick Start
-
-```bash
-# Navigate to project directory
-cd student-starter
-
-# Start infrastructure services (database, redis, prometheus)
-docker-compose up -d postgres redis prometheus grafana
-
-# Wait for services to be healthy
-docker-compose ps
-
-# Start developing your modules
-# Each team member works on their assigned module
+Prometheus ← Backend / Face Service / Metrics Exporter → Grafana
+Mailpit ← Local password-reset email
 ```
 
-### Service URLs (when running)
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000/docs
-- Face Recognition: http://localhost:8001/docs
-- Dashboard: http://localhost:8501
-- Grafana: http://localhost:3001 (admin/admin)
-- Prometheus: http://localhost:9090
+| Module | Directory | Main technologies |
+|---|---|---|
+| Student PWA | [`module1-frontend/`](module1-frontend/) | Next.js 14, React, TypeScript, Tailwind CSS, browser camera/geolocation/Web Crypto APIs |
+| Backend API | [`module2-backend/`](module2-backend/) | Python, FastAPI, SQLAlchemy, PostgreSQL, Redis |
+| Face recognition | [`module3-face-recognition/`](module3-face-recognition/) | Python, MediaPipe, OpenCV, ONNX Runtime |
+| Staff dashboard and observability | [`module4-observability/`](module4-observability/) | Streamlit, Prometheus, Grafana |
 
----
+## Getting started
 
-## Running Tests
+### Requirements
 
-You have access to the public test suite (75% of your grade).
+- **Docker Desktop** with Docker Compose (recommended for the complete application).
+- Git.
+- For running the frontend outside Docker: **Node.js 22.x** (as specified in [`module1-frontend/package.json`](module1-frontend/package.json)).
+- For local Python tests: a compatible Python environment and dependencies from [`requirements-test.txt`](requirements-test.txt).
 
-**IMPORTANT:** Tests send HTTP requests to your running services. Your services MUST be running before you run tests.
+### Run the application with Docker
 
-### Step 1: Install Test Dependencies
+> **Use a fresh, disposable database for demonstrations and tests.** The root Compose file uses fixed container names and published ports, so do not start it alongside another SAIV stack that already occupies those names or ports. The supplied configuration is intended for local coursework use, **not public internet exposure**.
 
-```bash
-cd student-starter
+From PowerShell:
 
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```powershell
+git clone https://github.com/Chandru-15/SAIV-Capstone.git
+cd SAIV-Capstone
 
-# Install test dependencies
-pip install --upgrade pip
-pip install -r requirements-test.txt
+Copy-Item .env.example .env
+# Edit .env: set unique POSTGRES_PASSWORD, SECRET_KEY and GF_ADMIN_PASSWORD
+# Generate a signing secret locally with:
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
 ```
 
-### Step 2: Start Your Services
+The `migrate` service applies [`db/schema.sql`](db/schema.sql) after PostgreSQL becomes healthy. Confirm it completed successfully:
 
-```bash
-# Build and start all your services
-docker-compose up -d
-
-# Wait for services to be healthy (about 30 seconds)
-docker-compose ps
-
-# Verify services are accessible
-curl http://localhost:8000/health
-curl http://localhost:8001/health
+```powershell
+docker compose logs --tail=100 migrate
+docker compose logs --tail=100 backend face-recognition frontend dashboard
 ```
 
-### Step 3: Run Tests
+### Local service URLs
 
-```bash
-# Set test environment variables (optional - defaults to localhost)
-export TEST_BACKEND_URL=http://localhost:8000
-export TEST_FACE_URL=http://localhost:8001
+| Service | URL |
+|---|---|
+| Student frontend | http://localhost:3000 |
+| Backend API / Swagger | http://localhost:8000/docs |
+| Backend health | http://localhost:8000/health |
+| Face-recognition API / Swagger | http://localhost:8001/docs |
+| Face-service health | http://localhost:8001/health |
+| Staff dashboard | http://localhost:8501 |
+| Mailpit (local password-reset messages) | http://localhost:8025 |
+| Grafana | http://localhost:3001 |
+| Prometheus | http://localhost:9090 |
 
-# Run all public tests
-python3 -m pytest tests/public/ -v
+The frontend and staff portal use separate sign-in flows. You need suitable accounts, course enrolments, and an open attendance session to run a complete check-in. Do not run destructive demo-seeding utilities against a database containing data you want to keep.
 
-# Run specific test category
-python3 -m pytest tests/public/test_api_functional.py -v
-python3 -m pytest tests/public/test_security_basic.py -v
-python3 -m pytest tests/public/test_privacy_basic.py -v
-python3 -m pytest tests/public/test_face_recognition.py -v
-python3 -m pytest tests/public/test_observability.py -v
-python3 -m pytest tests/public/test_integration.py -v
+To stop the stack **without deleting its volumes**:
 
-# The scoring plugin shows a summary at the end:
-# TOTAL SCORE: 90.0/90.0 (100.0%)
-# LETTER GRADE: A
+```powershell
+docker compose down
 ```
 
-### Step 4: Stop Services
+For additional workflows, see [`LOCAL-DEV.md`](LOCAL-DEV.md), [`docs/API-SPECIFICATION.md`](docs/API-SPECIFICATION.md), and [`docs/CRYPTO-PILOT-LOCAL.md`](docs/CRYPTO-PILOT-LOCAL.md).
 
-```bash
-# Stop all services
-docker-compose down
+## End-to-end walkthrough
 
-# Stop and remove volumes (clean slate)
-docker-compose down -v
+1. **Staff setup:** Sign in with an appropriate staff account, create a course, assign staff, enrol a student, and open an attendance session with the desired venue and policies.
+2. **Student setup:** Register or sign in, enable camera and geolocation consents, enrol a face, and register the current browser.
+3. **Browser-key setup (when required):** Confirm the account password and enrol the browser signing key.
+4. **Check in:** Open the session, allow camera/location access, follow the screen-light and blink instructions, and submit the evidence.
+5. **Review:** Read the approved/flagged/rejected result and inspect the corresponding attendance record through the staff portal.
+
+## Testing
+
+Public tests, module-specific tests, and frontend checks are included in the repository. **Public HTTP tests create data and should run only against a disposable test stack.** Results from a previous development revision should not be assumed to apply to an untested checkout.
+
+```powershell
+# From the repository root, with isolated test services running:
+python -m pip install -r requirements-test.txt
+python -m pytest tests/public -v
+
+# Frontend-only checks:
+cd module1-frontend
+npm ci
+npm test
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-### Troubleshooting
+See the test suite and module directories for additional backend and face-service checks. Automated checks supplement, rather than replace, a real-camera test of face matching and liveness.
 
-**Tests skipping with "Backend service not running":**
-```bash
-docker-compose up -d
-docker-compose ps  # Verify all services are "Up"
-```
+## Project files and submission material
 
-**Connection refused errors:**
-```bash
-export TEST_BACKEND_URL=http://localhost:8000
-curl $TEST_BACKEND_URL/health
-```
+- [API specification](docs/API-SPECIFICATION.md)
+- [Security requirements](docs/SECURITY-REQUIREMENTS.md)
+- [Recommended database design](docs/recommended_design/DATABASE-SCHEMA.md)
+- [Group 33 presentation slides](docs/SC3099%20Capstone%20Presentation%20Slides%20Group%2033.pdf)
+- [Local development notes](LOCAL-DEV.md)
 
-### Note on System Dependencies
+**Demo video:** The original coursework submission included a recording, but it is **not in this Git repository** because browser session information appeared in the recording. A redacted version may be shared separately after review. Do not follow a link to the excluded MP4.
 
-Some packages require system-level dependencies:
+## Security and deployment limitations
 
-- **face-recognition**: Requires `dlib` which needs `cmake` and C++ compiler
-  - macOS: `brew install cmake`
-  - Ubuntu: `sudo apt-get install cmake build-essential`
+- This is a coursework implementation. The default Docker Compose configuration publishes internal service ports and contains **development fallback credentials**; set unique secrets, restrict network access, and review the deployment before exposing it beyond localhost.
+- Browser-key verification confirms that the browser can use its registered signing key; it **does not attest to a physical device's hardware identity**.
+- Active-liveness protections reduce common photo attacks but do not guarantee resistance to prepared video, injected camera frames, or sophisticated replay attacks.
+- The staff portal's session-link handling requires further hardening for public deployment. The included Next.js version should also be upgraded and security-reviewed before internet-facing use.
+- The supplied face recognition model is documented as **non-commercial research use**; see [`module3-face-recognition/models/README.md`](module3-face-recognition/models/README.md) before reuse.
+- Keep passwords, API keys, biometric media and live session tokens out of Git history.
 
-- **opencv-python**: Usually works out of the box, but may need:
-  - Ubuntu: `sudo apt-get install libgl1-mesa-glx`
+## Project context
 
----
+Developed by **Group 33** for **NTU SC3099 Capstone Project**. The repository preserves the team's final submitted application across its four integrated modules.
 
-## Grading Breakdown
-
-### Public Tests (90 points) - Available to you
-
-| Test File | Points | Description |
-|-----------|--------|-------------|
-| test_api_functional.py | 26 | API endpoints, auth, CRUD operations |
-| test_face_recognition.py | 15 | Face enrollment, matching, risk assessment |
-| test_security_basic.py | 12 | JWT auth, input validation, rate limiting |
-| test_privacy_basic.py | 8 | Consent, data minimization, retention |
-| test_frontend_dashboard.py | 8 | Frontend/dashboard API contracts |
-| test_observability.py | 12 | Stats, session management, export (bonus) |
-| test_performance.py | 5 | Latency, concurrent users |
-| test_integration.py | 4 | End-to-end check-in flow |
-
-### Hidden Tests (40 points) - Revealed during grading
-
-| Category | Points | Description |
-|----------|--------|-------------|
-| Advanced Security | 12 | GPS spoofing, replay attacks, VPN detection |
-| Privacy Auditing | 8 | Database audit, encryption validation |
-| Face Recognition Advanced | 10 | Advanced liveness, anti-spoofing |
-| Liveness Bonus | 3 | Advanced liveness features |
-| Stress Testing | 7 | Concurrent users, edge cases |
-
----
-
-## Documentation
-
-Please review these specifications carefully:
-
-- **[API Specification](docs/API-SPECIFICATION.md)** - Complete endpoint documentation
-- **[Database Schema](docs/recommended_design/DATABASE-SCHEMA.md)** - All table definitions
-- **[Demo video](docs/Capstone%20Demo%20Test%20Run.mp4)** - Recorded end-to-end run of the system (79 MB)
-- **[Presentation slides](docs/SC3099%20Capstone%20Presentation%20Slides%20Group%2033.pdf)** - SC3099 final presentation, Group 33
-
----
-
-## Project Structure
-
-```
-student-starter/
-├── module1-frontend/          # PWA (your implementation)
-├── module2-backend/           # API (your implementation)
-├── module3-face-recognition/  # ML service (your implementation)
-├── module4-observability/     # Dashboard (your implementation)
-├── tests/
-│   ├── public/                # Public test suite (90 points)
-│   └── scoring/               # Pytest scoring plugin
-├── docs/
-│   ├── API-SPECIFICATION.md
-│   ├── DATABASE-SCHEMA.md
-│   ├── Capstone Demo Test Run.mp4                      # demo recording
-│   └── SC3099 Capstone Presentation Slides Group 33.pdf # slides
-└── docker-compose.yml
-```
-
----
-
-## Security Requirements
-
-Your implementation must include:
-
-1. **Authentication**
-   - JWT tokens (HS256)
-   - Bcrypt password hashing (cost >= 10)
-   - Role-based access control
-
-2. **Input Validation**
-   - Sanitize all user input
-   - Prevent SQL injection
-   - Prevent XSS attacks
-
-3. **Rate Limiting**
-   - Protect against brute force
-   - Use Redis for tracking
-
-4. **Geofencing**
-   - Validate GPS coordinates
-   - Calculate distance to venue
-
----
-
-## Required Admin Endpoints
-
-Tests require these admin endpoints for test data setup. See [API Specification](docs/API-SPECIFICATION.md) for details.
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/admin/users/{id}/deactivate` | PATCH | Deactivate user (for testing inactive login) |
-| `/api/v1/admin/users/{id}/activate` | PATCH | Reactivate user |
-| `/api/v1/admin/users/bulk` | POST | Bulk create users (for stress tests) |
-| `/api/v1/admin/sessions/{id}/status` | PATCH | Update session status |
-| `/api/v1/admin/enrollments/` | POST | Create enrollment (admin bypass) |
-
-**Note:** These endpoints require admin authentication and are used by the test suite to set up test scenarios.
-
----
-
-## Privacy Requirements
-
-Your implementation must:
-
-1. **Never store raw face images** - Process in memory, store only hashes
-2. **Track consent** - Camera and geolocation permissions
-3. **Implement retention** - 30-day auto-deletion of records
-4. **Create audit logs** - Immutable event trail
-
----
-
-## Tips for Success
-
-1. **Read the specifications thoroughly** before coding
-2. **Run tests frequently** to catch issues early
-3. **Communicate with your team** - modules must integrate
-4. **Don't over-engineer** - focus on requirements
-5. **Think about security** from the start
-6. **Document your decisions** for the final report
-
----
-
-## Common Pitfalls
-
-Avoid these mistakes:
-- Storing raw face images (automatic privacy test failure)
-- Ignoring rate limiting (vulnerable to attacks)
-- Missing geofence validation (easy to bypass)
-- Poor error handling (crashes under load)
-- Incorrect CORS configuration (frontend can't communicate)
-
----
-
-## Questions?
-
-- Review the API specification and database schema
-- Run the public tests to understand requirements
-- Check the skeleton code for implementation hints
-
-Good luck with your capstone project!
